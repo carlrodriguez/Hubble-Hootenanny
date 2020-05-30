@@ -16,10 +16,11 @@ def add_default_units(quant,unit):
 
 ## Rather than recompute the the frequency and angular variables,
 ## just import the table from Emanuele's website
-
-## Yes, yes, it's poor form to have global variables, 
-## but honestly it's so much eaasier here
-kerr_qnm = pd.read_pickle('Kerr_QNM_coefs/PandaBerti.pkl')
+try:
+    kerr_qnm = pd.read_pickle('PandaBerti.pkl')
+except FileNotFoundError:
+    print("You don't have the Kerr QNM table locally.")
+    print("Use the build_kerr_qnm_table function.")
 
 def spin_index(a):
     """
@@ -261,3 +262,48 @@ def pattern_functions(theta,phi,psi,triangle=False):
         F_cross *= 0.8660254
 
     return F_plus,F_cross
+
+def build_kerr_qnm_table(folder):
+    """
+    Function to build a Pandas file of all the Kerr QNM coefficients
+    from Berti et al., 2006.
+
+    It takes as input a path to a folder where you have all of the 
+    unzipped files from https://pages.jh.edu/~eberti2/ringdown/ 
+    unzipped (in this case, l2-l7 for the s = -2 case)
+
+    Saves the file as a pandas pickle in the current folder
+    """
+    ## The script to put all of the Kerr QNMs from
+    ## Berti et al. 2006 into a pandas dataframe
+
+    FirstFile = True
+
+    for n in range(1,9):
+        for l in range(2,8):
+            for m in range(-l,l+1):
+
+                if m < 0:
+                    m_str = 'm'+str(-m)
+                else:
+                    m_str = str(m)
+
+                filename = folder+'/l'+str(l)+'/n'+str(n)+'l'+str(l)+'m'+m_str+'.dat'
+                col_1 = 'n'+str(n)+'_l'+str(l)+'_m'+str(m)+'_ReOmega'
+                col_2 = 'n'+str(n)+'_l'+str(l)+'_m'+str(m)+'_ImOmega'
+                col_3 = 'n'+str(n)+'_l'+str(l)+'_m'+str(m)+'_ReAlm'
+                col_4 = 'n'+str(n)+'_l'+str(l)+'_m'+str(m)+'_ImAlm'
+
+                column_list = [col_1, col_2, col_3, col_4]
+
+                df = pd.read_csv(filename,sep=' ',index_col=0,header=None)
+                df.columns = column_list
+
+                if FirstFile:
+                    df_full = df
+                    FirstFile = False
+                else:
+                    for column in column_list:
+                        df_full[column] = pd.Series(df[column])
+
+    df_full.to_pickle("PandaBerti.pkl")
