@@ -1,5 +1,4 @@
 import numpy as np
-from useful import gravywaves as gw, cosmo as co
 from astropy import units as u, constants as c
 import lal
 import lalsimulation as ls
