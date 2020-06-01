@@ -73,21 +73,25 @@ def recurrence_coefficients(l, m, nn, aOmega, A_nlm):
 
     return (alpha,beta,gamma)
 
-def spherical_lm_unnormalized(u, l, m, aOmega, A_nlm):
+def spherical_lm(u, a, l, m, Omega_nlm, A_nlm):
     """
     Computes the spheroidal wavefunctions (s=-2) from equations
-    18, 19, and 20 of Leaver 1985
+    18, 19, and 20 of Leaver 1985, then normalizes them
 
-    NOTE: a is from -0.5 to 0.5, because Leaver uses C=G=2M=1.
-        This also means omega is times 2...
+    NOTE: Leaver uses c=G=2M=1, but since only a*omega enters the equations, the 
+    2's cancel
     """
-
     s = -2
 
     k1 = abs(m - s) / 2
     k2 = abs(m + s) / 2
 
-    sum_N = 500
+    aOmega = a*Omega_nlm
+
+    sum_N = 100
+
+    ## Computing the coefficients for the recurrence relation can be done
+    ## outside the main part of th s_nlm
     a_n = np.zeros(sum_N, dtype=np.complex128)
 
     ## First set the initial a_n[N-1] and a_n[N]
@@ -103,30 +107,13 @@ def spherical_lm_unnormalized(u, l, m, aOmega, A_nlm):
 
         nn += 1
 
-    ## compute the sum in eqn. 18
-    sum_a_n = np.sum(a_n*((1+u)**np.arange(0,sum_N)))
-
-    ## finally the coefficient in 18
-    coef = np.exp(aOmega*u) * (1+u)**k1 * (1-u)**k2
-
-    return coef*sum_a_n
-
-
-def spherical_lm(u, a, l, m, Omega_nlm, A_nlm):
-    """
-    Computes the spheroidal wavefunctions (s=-2) from equations
-    18, 19, and 20 of Leaver 1985, then normalizes them
-
-    NOTE: Leaver uses c=G=2M=1, but since only a*omega enters the equations, the 
-    2's cancel
-    """
-    aOmega = a*Omega_nlm
-
-    integrand = lambda x: np.abs(spherical_lm_unnormalized(x, l, m, aOmega, A_nlm))**2
+    ## now integrate and normalize
+    integrand = lambda x: np.abs(np.exp(aOmega*x) * (1+x)**k1 * (1-x)**k2 * 
+                            np.sum(a_n*((1+x)**np.arange(0,sum_N))))**2
 
     norm,_ = quad(integrand,-1,1)
 
-    return spherical_lm_unnormalized(u, l, m, aOmega, A_nlm) / np.sqrt(norm)
+    return np.sqrt(integrand(u) / norm)
 
 
 def hp_hx_ringdown_time_domain(m_final, a_final, m_frac, inclination, dist, 
@@ -163,12 +150,12 @@ def hp_hx_ringdown_time_domain(m_final, a_final, m_frac, inclination, dist,
     h = (np.exp(1j*(2*np.pi*f_nlm*times) - times/tau_nlm)*s_nlm + 
             np.exp(1j*(-2*np.pi*f_nlm*times) - times/tau_nlm)*s_nlm_conj)
 
-    ## 3.18 of same
-    amp = np.sqrt(32*Q_nlm*m_frac / (f_nlm*(1+4*Q_nlm**2)))
+    ## Amplitude from Baibhav and Berti 2018 (1809.03500)
+    amp = np.sqrt(4*m_frac/(m_final*Q_nlm*f_nlm))
 
     return m_over_r*amp*h.real, m_over_r*amp*h.imag, times
 
-def hp_hx_ringdown(m_final, a_final, m_frac, inclination, dist, phi0, 
+def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0, 
         df=0.1, fmin=5,fmax=2000,n=1, l=2, m=2):
 
     ## add default units, then convert them to seconds because relativity
@@ -185,7 +172,7 @@ def hp_hx_ringdown(m_final, a_final, m_frac, inclination, dist, phi0,
     Omega_nlm, A_nlm = get_qnm(a_final,n,l,m)
 
     w_nlm = Omega_nlm/m_final
-    tau_nlm = 1 / abs(w_nlm.imag) 
+    tau_nlm = 1 / abs(w_nlm.imag)
     one_over_tau_nlm = 1. / tau_nlm
     f_nlm = w_nlm.real / (2 * np.pi) 
     Q_nlm = np.pi*f_nlm*tau_nlm 
@@ -210,11 +197,13 @@ def hp_hx_ringdown(m_final, a_final, m_frac, inclination, dist, phi0,
     hp = b_plus*np.conj(s_nlm+s_nlm_mmu) + b_minus*(s_nlm+s_nlm_mmu)
     hx = 1j*(b_plus*(s_nlm_mmu-s_nlm) + b_minus*np.conj(s_nlm-s_nlm_mmu))
 
-    ## 3.18 of Berti et al., 2006 
-    amp = np.sqrt(32*Q_nlm*m_frac / (f_nlm*(1+4*Q_nlm**2)))
+    ## Amplitude from Baibhav and Berti 2018 (1809.03500)
+    amp = np.sqrt(4*m_frac/(m_final*Q_nlm*f_nlm))
 
     return m_over_r*amp*hp, m_over_r*amp*hx,freqs
 
+#def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0, 
+#        df=0.1, fmin=5,fmax=2000,n=1, l=2, m=2):
 
 def hp_hx_inspiral(m1,m2,dist,phase=0.,df=1e-2,
                 s1x=0.0,s1y=0.0,s1z=0.0,s2x=0.0,s2y=0.0,s2z=0.0,
