@@ -134,7 +134,6 @@ def hp_hx_ringdown_time_domain(m_final, a_final, m_frac, inclination, dist,
 
     w_nlm = Omega_nlm/m_final
     tau_nlm = 1 / abs(w_nlm.imag) 
-    one_over_tau_nlm = 1. / tau_nlm
     f_nlm = w_nlm.real / (2 * np.pi) 
     Q_nlm = np.pi*f_nlm*tau_nlm 
 
@@ -156,7 +155,7 @@ def hp_hx_ringdown_time_domain(m_final, a_final, m_frac, inclination, dist,
     return m_over_r*amp*h.real, m_over_r*amp*h.imag, times
 
 def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0, 
-        df=0.1, fmin=5,fmax=2000,n=1, l=2, m=2):
+        freqs,n=1, l=2, m=2, signs=np.ones(8)):
 
     ## add default units, then convert them to seconds because relativity
     m_final = add_default_units(m_final, u.solMass)
@@ -166,14 +165,11 @@ def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0
     dist     = (dist / c.c).to(u.s).value
     m_over_r = m_final/dist
 
-    freqs = np.arange(fmin,fmax,df)
-
     ##  First get the QNM coefficients and compute the frequency/quality factor
     Omega_nlm, A_nlm = get_qnm(a_final,n,l,m)
 
     w_nlm = Omega_nlm/m_final
-    tau_nlm = 1 / abs(w_nlm.imag)
-    one_over_tau_nlm = 1. / tau_nlm
+    tau_nlm = 1 / abs(w_nlm.imag) 
     f_nlm = w_nlm.real / (2 * np.pi) 
     Q_nlm = np.pi*f_nlm*tau_nlm 
 
@@ -194,16 +190,73 @@ def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0
     ## needs to be done carefully to keep track of the S_nlm and S_nlm* 
     ## components
 
-    hp = b_plus*np.conj(s_nlm+s_nlm_mmu) + b_minus*(s_nlm+s_nlm_mmu)
-    hx = 1j*(b_plus*(s_nlm_mmu-s_nlm) + b_minus*np.conj(s_nlm-s_nlm_mmu))
+    hp = b_plus*np.conj(signs[0]*s_nlm+signs[1]*s_nlm_mmu) + b_minus*(signs[2]*s_nlm+signs[3]*s_nlm_mmu)
+    hx = -1j*(b_plus*(-signs[4]*s_nlm_mmu+signs[5]*s_nlm) - b_minus*np.conj(signs[6]*s_nlm-signs[7]*s_nlm_mmu))
+
+    #hp = b_plus*s_nlm + b_minus*np.conj(s_nlm_mmu)
+    #hx = -1j*(b_plus*s_nlm - b_minus*np.conj(s_nlm_mmu))
 
     ## Amplitude from Baibhav and Berti 2018 (1809.03500)
-    amp = np.sqrt(4*m_frac/(m_final*Q_nlm*f_nlm))
+    amp = np.sqrt(16*Q_nlm*m_frac / (m_final*f_nlm*(1+4*Q_nlm**2)))
+    ## The 2*pi comes from the fourier transform, and the other 2 from 
+    ## The Flanagan and Hughes way of the FT (assuming the ringdown is 
+    ## symmetric about 0, then divide by sqrt2 to compensate)
+    amp /= np.sqrt(4*np.pi)
+    #amp *= 2
 
-    return m_over_r*amp*hp, m_over_r*amp*hx,freqs
+    return m_over_r*amp*hp, m_over_r*amp*hx
 
-#def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0, 
-#        df=0.1, fmin=5,fmax=2000,n=1, l=2, m=2):
+def hp_hx_ringdown(m_final, a_final, m1, m2, a1, a2, inclination, dist, phi0, 
+        df=0.1, fmin=5,fmax=2000, l=None, m=None, signs=np.ones(8)):
+    
+    chi_p = (m1*a1[2] + m2*a2[2]) / (m1+m2)
+    chi_m = (m1*a1[2] - m2*a2[2]) / (m1+m2)
+    q = max(m1,m2)/min(m1,m2)
+    eta = q / (1+q)**2
+    delta = (q - 1) / (q + 1)
+
+    A0_22 = 0.303 + 0.571*eta
+    A0_33 = 0.157 + 0.671*eta
+    A0_21 = 0.099 + 0.06*eta
+    A0_44 = 0.122 - 0.188*eta - 0.964*eta*eta
+
+    AS_22 = eta*chi_p*(-0.07 + 0.255/q + 0.189*q - 0.013*q*q) + 0.084*delta*chi_m
+    AS_33 = eta*chi_m*(0.163 - 0.187/q + 0.021*q) + 0.073*delta*chi_p
+    AS_21 = -0.067*chi_m
+    AS_44 = eta*chi_p*(-0.207/q + 0.034*q) + delta*eta*chi_m*(-0.701 + 1.387/q + 0.122*q)
+
+    E_22 = (eta*(A0_22+AS_22))**2
+    E_44 = (eta*(A0_44+AS_44))**2
+    E_21 = (eta*(np.sqrt(1-4*eta)*A0_21 + AS_21))**2
+    E_33 = (eta*(np.sqrt(1-4*eta)*A0_33 + AS_33))**2
+
+    freqs = np.arange(fmin,fmax,df)
+
+
+    if l == None and m == None:
+        hp_22,hx_22 = hp_hx_ringdown_single_mode(m_final, a_final, E_22, inclination, dist, phi0, freqs, l=2, m=2)
+        hp_44,hx_44 = hp_hx_ringdown_single_mode(m_final, a_final, E_44, inclination, dist, phi0, freqs, l=4, m=4)
+        hp_21,hx_21 = hp_hx_ringdown_single_mode(m_final, a_final, E_21, inclination, dist, phi0, freqs, l=2, m=1)
+        hp_33,hx_33 = hp_hx_ringdown_single_mode(m_final, a_final, E_33, inclination, dist, phi0, freqs, l=3, m=3)
+        return hp_22+hp_44+hp_21+hp_33, hx_22+hx_44+hx_21+hx_33, freqs
+    elif l == 2 and m == 2:
+        hp_22,hx_22 = hp_hx_ringdown_single_mode(m_final, a_final, E_22, inclination, dist, phi0, freqs, l=2, m=2)
+        return hp_22,hx_22,freqs
+    elif l == 2 and m == 1:
+        hp_21,hx_21 = hp_hx_ringdown_single_mode(m_final, a_final, E_21, inclination, dist, phi0, freqs, l=2, m=1)
+        return hp_21,hx_21,freqs
+    elif l == 4 and m == 4:
+        hp_44,hx_44 = hp_hx_ringdown_single_mode(m_final, a_final, E_44, inclination, dist, phi0, freqs, l=4, m=4)
+        return hp_44,hx_44,freqs
+    elif l == 3 and m == 3:
+        hp_33,hx_33 = hp_hx_ringdown_single_mode(m_final, a_final, E_33, 
+                inclination, dist, phi0, freqs, l=3, m=3, signs=signs)
+        return hp_33,hx_33,freqs
+    else:
+        print("ERROR: this (l,m) is not one we have amplitude corrections for")
+        return 0,0,0
+
+
 
 def hp_hx_inspiral(m1,m2,dist,phase=0.,df=1e-2,
                 s1x=0.0,s1y=0.0,s1z=0.0,s2x=0.0,s2y=0.0,s2z=0.0,
@@ -242,8 +295,8 @@ def pattern_functions(theta,phi,psi,triangle=False):
     c2psi = np.cos(2*psi)
     s2psi = np.sin(2*psi)
 
-    F_plus  = 0.5*(1+ctheta_2)*c2phi*c2psi - ctheta*s2phi*s2psi
-    F_cross = 0.5*(1+ctheta_2)*c2phi*s2psi + ctheta*s2phi*c2psi
+    F_plus  = 0.5*(1+ctheta_squ)*c2phi*c2psi - ctheta*s2phi*s2psi
+    F_cross = 0.5*(1+ctheta_squ)*c2phi*s2psi + ctheta*s2phi*c2psi
 
     if triangle:
         F_plus  *= 0.8660254
