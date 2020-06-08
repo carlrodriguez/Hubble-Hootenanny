@@ -155,7 +155,7 @@ def hp_hx_ringdown_time_domain(m_final, a_final, m_frac, inclination, dist,
     return m_over_r*amp*h.real, m_over_r*amp*h.imag, times
 
 def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0, 
-        freqs,n=1, l=2, m=2, signs=np.ones(8)):
+        freqs,n=1, l=2, m=2):
 
     ## add default units, then convert them to seconds because relativity
     m_final = add_default_units(m_final, u.solMass)
@@ -190,8 +190,8 @@ def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0
     ## needs to be done carefully to keep track of the S_nlm and S_nlm* 
     ## components
 
-    hp = b_plus*np.conj(signs[0]*s_nlm+signs[1]*s_nlm_mmu) + b_minus*(signs[2]*s_nlm+signs[3]*s_nlm_mmu)
-    hx = -1j*(b_plus*(-signs[4]*s_nlm_mmu+signs[5]*s_nlm) - b_minus*np.conj(signs[6]*s_nlm-signs[7]*s_nlm_mmu))
+    hp = b_plus*np.conj(s_nlm+s_nlm_mmu) + b_minus*(s_nlm+s_nlm_mmu)
+    hx = -1j*(b_plus*(s_nlm_mmu+s_nlm) - b_minus*np.conj(s_nlm-s_nlm_mmu))
 
     #hp = b_plus*s_nlm + b_minus*np.conj(s_nlm_mmu)
     #hx = -1j*(b_plus*s_nlm - b_minus*np.conj(s_nlm_mmu))
@@ -202,16 +202,31 @@ def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0
     ## The Flanagan and Hughes way of the FT (assuming the ringdown is 
     ## symmetric about 0, then divide by sqrt2 to compensate)
     amp /= np.sqrt(4*np.pi)
-    #amp *= 2
 
     return m_over_r*amp*hp, m_over_r*amp*hx
 
-def hp_hx_ringdown(m_final, a_final, m1, m2, a1, a2, inclination, dist, phi0, 
-        df=0.1, fmin=5,fmax=2000, l=None, m=None, signs=np.ones(8)):
+def hp_hx_ringdown(m_final=100, a_final=0.69, q=1, chi_p=0, chi_m=0, inclination=0, dist=500, phi0=0, 
+        df=0.1, fmin=5,fmax=2000, l=None, m=None):
+    """
+    Computes the ringdown waveform in the frequency domain.  Uses the amplitudes 
+    from Baibhav and Berti 2018 (1809.03500) as a function of chi_p 
+    (chi_effective), chi_m ((m1*sz1 - m2*sz2)/(m1+m2)) and mass ratio q (greater 
+    than 1).  
+
+    By default, l=None, m=None includes the (2,2), (3,3), (4,4), and (2,1) modes
+    with their appropriate amplitudes.  If you select one of those individual 
+    nodes, it will return just that one (with appropriate amplitude).  
+
+    Note I'm assuming equal amplitudes in h+ and hx, and that all initial phases 
+    for the ringdowns (except for the phi0 of the source in the spheriodal harmonics) 
+    are identically 0.
+
+    returns hp, hx, frequencies
+    """
     
-    chi_p = (m1*a1[2] + m2*a2[2]) / (m1+m2)
-    chi_m = (m1*a1[2] - m2*a2[2]) / (m1+m2)
-    q = max(m1,m2)/min(m1,m2)
+    if q < 1.:
+        q = 1./q
+
     eta = q / (1+q)**2
     delta = (q - 1) / (q + 1)
 
@@ -250,7 +265,7 @@ def hp_hx_ringdown(m_final, a_final, m1, m2, a1, a2, inclination, dist, phi0,
         return hp_44,hx_44,freqs
     elif l == 3 and m == 3:
         hp_33,hx_33 = hp_hx_ringdown_single_mode(m_final, a_final, E_33, 
-                inclination, dist, phi0, freqs, l=3, m=3, signs=signs)
+                inclination, dist, phi0, freqs, l=3, m=3)
         return hp_33,hx_33,freqs
     else:
         print("ERROR: this (l,m) is not one we have amplitude corrections for")
