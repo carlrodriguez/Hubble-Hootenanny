@@ -30,42 +30,57 @@ def compute_SNR(h,freqs,psd_interp):
     """
     return np.sqrt(inner_product(h,h,freqs,psd_interp))
 
-def function_derivatives(h_func,deriv_key,params,delta_xs):
+def function_derivatives(h_func,deriv_key,delta_h,params):
     """
     Computes the derivative of the gravitational wave given by 5-point 
 
     h_func is the function, 
     deriv_key is the key for the parameter we want to differentiate with respect to
     params is the dictionary of waveform parameters
-    delta_xs is the dictionary of derivative step sizes
+    delta_h is the derivative step size
 
     returns hp, hx, freqs
     """
 
     param_center = params[deriv_key]
-    h = delta_xs[deriv_key]
 
-    params[deriv_key] = param_center + 2*h
+    params[deriv_key] = param_center + 2*delta_h
     hp_p2,hx_p2,_ = h_func(**params)
 
-    params[deriv_key] = param_center + h 
+    params[deriv_key] = param_center + delta_h 
     hp_p1,hx_p1,_ = h_func(**params)
 
-    params[deriv_key] = param_center - h 
+    params[deriv_key] = param_center - delta_h 
     hp_m1,hx_m1,_ = h_func(**params)
 
-    params[deriv_key] = param_center - 2*h
+    params[deriv_key] = param_center - 2*delta_h
     hp_m2,hx_m2,freqs = h_func(**params)
 
-    hp = (-hp_p2 + 8*hp_p1 - 8*hp_m1 + hp_m2) / (12*h)
-    hx = (-hx_p2 + 8*hx_p1 - 8*hx_m1 + hx_m2) / (12*h)
+    hp = (-hp_p2 + 8*hp_p1 - 8*hp_m1 + hp_m2) / (12*delta_h)
+    hx = (-hx_p2 + 8*hx_p1 - 8*hx_m1 + hx_m2) / (12*delta_h)
 
     ## Dictionaries are mutable in python, so put this back where it was
     params[deriv_key] = param_center
 
     return hp, hx, freqs
 
-
+def fisher_matrix(h_func,deriv_keys,params,delta_xs,psd_interp):
     
+    num_params = len(deriv_keys)
+    fm = np.zeros(shape=(num_params,num_params))
 
-     
+    ## first precompute the derivatives
+    dh = {}
+    for deriv_key in deriv_keys:
+        delta_h = delta_xs[deriv_key]
+        hp,hx,freqs = function_derivatives(h_func,deriv_key,delta_h,params) 
+        dh[deriv_key] = hp ##TODO: we don't need it for this, but put 
+                               ## pattern functions in here at some point!!!
+
+    ## Now evaluate the actual Fisher Matrix
+    for i,i_name in enumerate(deriv_keys):
+        for j,j_name in enumerate(deriv_keys[i:]):
+            fm[i,j+i] = inner_product(dh[i_name],dh[j_name],freqs,psd_interp)
+            fm[j+i,i] = fm[i,j+i]
+
+    return fm

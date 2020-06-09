@@ -273,20 +273,28 @@ def hp_hx_ringdown(m_final=100, a_final=0.69, q=1, chi_p=0, chi_m=0, inclination
 
 
 
-def hp_hx_inspiral(m1,m2,dist,phase=0.,df=1e-2,
-                s1x=0.0,s1y=0.0,s1z=0.0,s2x=0.0,s2y=0.0,s2z=0.0,
-                fmin=1.,fmax=0.,fref=1.,iota=0.,longAscNodes=0.,
+def hp_hx_inspiral(mtotal=100,q=1,dist=500,phi0=0.,df=1e-2,
+                s1x=0.0,s1y=0.0,chi_p=0.0,s2x=0.0,s2y=0.0,chi_m=0.0,
+                fmin=5.,fmax=2000.,fref=1.,inclination=0.,longAscNodes=0.,
                 eccentricity=0.,meanPerAno=0.,LALpars=None,
-                approx=ls.IMRPhenomD):
+                approx=ls.IMRPhenomPv3HM):
     """
     Wrapper for a LAL waveform, courtesy of Chris Pankow
-    m1,m2 in solar masses, distance in parsec
+    mtotal in solar masses, mass ratio q > 1,  distance in parsec
     
     returns (hplus, hcross, frequency)
     """
 
+    if q < 1:
+        q = 1/q
+
+    m2 = mtotal / (1+q)
+    m1 = mtotal / (1+1/q)
+    s1z = (m1+m2)*(chi_p+chi_m) / (2*m1)
+    s2z = (m1+m2)*(chi_p-chi_m) / (2*m2)
+
     hplus_tilda, hcross_tilda = ls.SimInspiralChooseFDWaveform(m1*lal.MSUN_SI, m2*lal.MSUN_SI, s1x, s1y, s1z, s2x, s2y, s2z, 
-                                                        dist*(1E6 * ls.lal.PC_SI),iota,phase,longAscNodes,eccentricity,meanPerAno,df,
+                                                        dist*(1E6*ls.lal.PC_SI),inclination,phi0,longAscNodes,eccentricity,meanPerAno,df,
                                                         fmin,fmax,fref,LALpars,approx)
 
     freqs=np.array([hplus_tilda.f0+i*hplus_tilda.deltaF for i in np.arange(hplus_tilda.data.length)])
