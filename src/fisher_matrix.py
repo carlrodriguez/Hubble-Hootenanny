@@ -39,30 +39,29 @@ def function_derivatives(h_func,deriv_key,delta_h,params):
     params is the dictionary of waveform parameters
     delta_h is the derivative step size
 
-    returns hp, hx, freqs
+    returns h_deriv, freqs
     """
 
     param_center = params[deriv_key]
 
     params[deriv_key] = param_center + 2*delta_h
-    hp_p2,hx_p2,_ = h_func(**params)
+    h_p2,_ = h_func(**params)
 
     params[deriv_key] = param_center + delta_h 
-    hp_p1,hx_p1,_ = h_func(**params)
+    h_p1,_ = h_func(**params)
 
     params[deriv_key] = param_center - delta_h 
-    hp_m1,hx_m1,_ = h_func(**params)
+    h_m1,_ = h_func(**params)
 
     params[deriv_key] = param_center - 2*delta_h
-    hp_m2,hx_m2,freqs = h_func(**params)
+    h_m2,freqs = h_func(**params)
 
-    hp = (-hp_p2 + 8*hp_p1 - 8*hp_m1 + hp_m2) / (12*delta_h)
-    hx = (-hx_p2 + 8*hx_p1 - 8*hx_m1 + hx_m2) / (12*delta_h)
+    h_der = (-h_p2 + 8*h_p1 - 8*h_m1 + h_m2) / (12*delta_h)
 
     ## Dictionaries are mutable in python, so put this back where it was
     params[deriv_key] = param_center
 
-    return hp, hx, freqs
+    return h_der, freqs
 
 def fisher_matrix(h_func,deriv_keys,params,delta_xs,psd_interp):
     
@@ -73,9 +72,8 @@ def fisher_matrix(h_func,deriv_keys,params,delta_xs,psd_interp):
     dh = {}
     for deriv_key in deriv_keys:
         delta_h = delta_xs[deriv_key]
-        hp,hx,freqs = function_derivatives(h_func,deriv_key,delta_h,params) 
-        dh[deriv_key] = hp ##TODO: we don't need it for this, but put 
-                               ## pattern functions in here at some point!!!
+        h_der,freqs = function_derivatives(h_func,deriv_key,delta_h,params) 
+        dh[deriv_key] = h_der 
 
     ## Now evaluate the actual Fisher Matrix
     for i,i_name in enumerate(deriv_keys):

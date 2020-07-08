@@ -1,5 +1,6 @@
 import numpy as np
 from astropy import units as u, constants as c
+from astropy.cosmology import Planck15 as cosmo
 import lal
 import lalsimulation as ls
 import pandas as pd
@@ -205,8 +206,8 @@ def hp_hx_ringdown_single_mode(m_final, a_final, m_frac, inclination, dist, phi0
 
     return m_over_r*amp*hp, m_over_r*amp*hx
 
-def hp_hx_ringdown(m_final=100, a_final=0.69, q=1, chi_p=0, chi_m=0, inclination=0, dist=500, phi0=0, 
-        df=0.1, fmin=5,fmax=2000, l=None, m=None):
+def hp_hx_ringdown(m_final=100, a_final=0.69, q=1, chi_p=0, chi_m=0, 
+        inclination=0, dist=500, phi0=0, df=0.1, fmin=5,fmax=2000, l=None, m=None):
     """
     Computes the ringdown waveform in the frequency domain.  Uses the amplitudes 
     from Baibhav and Berti 2018 (1809.03500) as a function of chi_p 
@@ -247,13 +248,12 @@ def hp_hx_ringdown(m_final=100, a_final=0.69, q=1, chi_p=0, chi_m=0, inclination
 
     freqs = np.arange(fmin,fmax,df)
 
-
     if l == None and m == None:
         hp_22,hx_22 = hp_hx_ringdown_single_mode(m_final, a_final, E_22, inclination, dist, phi0, freqs, l=2, m=2)
         hp_44,hx_44 = hp_hx_ringdown_single_mode(m_final, a_final, E_44, inclination, dist, phi0, freqs, l=4, m=4)
         hp_21,hx_21 = hp_hx_ringdown_single_mode(m_final, a_final, E_21, inclination, dist, phi0, freqs, l=2, m=1)
         hp_33,hx_33 = hp_hx_ringdown_single_mode(m_final, a_final, E_33, inclination, dist, phi0, freqs, l=3, m=3)
-        return hp_22+hp_44+hp_21+hp_33, hx_22+hx_44+hx_21+hx_33, freqs
+        return (hp_22+hp_44+hp_21+hp_33), (hx_22+hx_44+hx_21+hx_33), freqs
     elif l == 2 and m == 2:
         hp_22,hx_22 = hp_hx_ringdown_single_mode(m_final, a_final, E_22, inclination, dist, phi0, freqs, l=2, m=2)
         return hp_22,hx_22,freqs
@@ -264,8 +264,7 @@ def hp_hx_ringdown(m_final=100, a_final=0.69, q=1, chi_p=0, chi_m=0, inclination
         hp_44,hx_44 = hp_hx_ringdown_single_mode(m_final, a_final, E_44, inclination, dist, phi0, freqs, l=4, m=4)
         return hp_44,hx_44,freqs
     elif l == 3 and m == 3:
-        hp_33,hx_33 = hp_hx_ringdown_single_mode(m_final, a_final, E_33, 
-                inclination, dist, phi0, freqs, l=3, m=3)
+        hp_33,hx_33 = hp_hx_ringdown_single_mode(m_final, a_final, E_33, inclination, dist, phi0, freqs, l=3, m=3)
         return hp_33,hx_33,freqs
     else:
         print("ERROR: this (l,m) is not one we have amplitude corrections for")
@@ -326,6 +325,39 @@ def pattern_functions(theta,phi,psi,triangle=False):
         F_cross *= 0.8660254
 
     return F_plus,F_cross
+
+def h_inspiral(mtotal=100,q=1,dist=500,phi0=0.,df=1e-2,
+                s1x=0.0,s1y=0.0,chi_p=0.0,s2x=0.0,s2y=0.0,chi_m=0.0,
+                fmin=5.,fmax=2000.,fref=1.,inclination=0.,longAscNodes=0.,
+                eccentricity=0.,meanPerAno=0.,LALpars=None,theta=0,phi=0,
+                psi=0,approx=ls.IMRPhenomPv3HM):
+
+    hp,hx,freqs = hp_hx_inspiral(mtotal,q,dist,phi0,df,s1x,s1y,chi_p,s2x,s2y,chi_m,
+                            fmin,fmax,fref,inclination,longAscNodes,
+                            eccentricity,meanPerAno,LALpars,approx)
+
+    fp,fx = pattern_functions(theta,phi,psi)
+
+    return hp*fp+hx*fx, freqs
+
+
+def h_ringdown(m_final=100,a_final=0.69,q=1,chi_p=0,chi_m=0,inclination=0,dist=500,z=0,
+        vkick=0,phi0=0,theta=0,phi=0,psi=0,df=0.1,fmin=5,fmax=2000, l=None, m=None):
+ 
+    hp,hx,freqs =  hp_hx_ringdown(m_final,a_final,q,chi_p,chi_m,inclination,dist,phi0,df,fmin,fmax,l,m)
+
+    fp,fx = pattern_functions(theta,phi,psi)
+
+    vkick   = add_default_units(vkick, u.km/u.s)
+    dist = add_default_units(dist, u.Mpc)
+
+    if z != 0: 
+        fracD = 1 + (vkick/c.c*(1-(1+z)**2 / (dist*cosmo.H(z)/c.c))).decompose()
+    else:
+        fracD = 1
+
+    return (hp*fp+hx*fx)/fracD, freqs
+
 
 def build_kerr_qnm_table(folder):
     """

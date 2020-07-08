@@ -55,3 +55,29 @@ def load_detector_psd(detector='LIGO_Design',path='src/'):
     psd_interp = interp1d(input_freq, strain**2)
 
     return psd_interp
+
+def load_cumulative_fraction(network='HLV',path='src/'):
+    """ 
+    Loads the cumulative distribution for the fraction of sources 
+    above a certain threshold (useful for computing detectability)
+
+    Available detectors are:
+        'HLV' (default)
+        'Single'
+
+    You'll need the absolute path to the src directory
+
+    """
+    if network == 'HLV':
+        asdfile = path+'detector_files/pw_hlv.dat'
+        w_sample , P_sample = np.genfromtxt(asdfile,unpack=True)
+    elif network == 'Single':
+        asdfile = path+'detector_files/pw_single.dat'
+        w_sample , P_sample = np.genfromtxt(asdfile,unpack=True)
+    else:
+        print("ERROR: "+network+" is not a valid configuration")
+        return None
+
+    P_interp = interp1d(w_sample, P_sample,bounds_error=False,fill_value=0.0)
+
+    return P_interp 
